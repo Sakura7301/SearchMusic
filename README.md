@@ -4,6 +4,7 @@
 插件名称：SearchMusic
 作者：Lingyuzhou
 版本：3.0
+
 感谢好朋友“標”提供的代码支持（微信号：tkekingcom）
 
 ## 插件更新日志
