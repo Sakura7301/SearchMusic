@@ -42,10 +42,10 @@ class SearchMusic(Plugin):
             # 只确保URL是以http或https开头的
             if not thumb_url.startswith(("http://", "https://")):
                 thumb_url = "https://" + thumb_url.lstrip("/")
-            
+
             # 确保URL没有特殊字符
             thumb_url = thumb_url.replace("&", "&amp;")
-                
+
         # 根据平台在标题中添加前缀
         if platform.lower() == "kugou":
             display_title = f"[酷狗] {title}"
@@ -59,10 +59,10 @@ class SearchMusic(Plugin):
         else:
             display_title = title
             source_display_name = "音乐分享"
-        
+
         # 确保URL没有特殊字符
         url = url.replace("&", "&amp;")
-        
+
         # 使用更简化的XML结构，但保留关键标签
         xml = f"""<appmsg appid="" sdkver="0">
     <title>{display_title}</title>
@@ -95,10 +95,10 @@ class SearchMusic(Plugin):
     <songalbumurl>{thumb_url}</songalbumurl>
     <songlyric></songlyric>
 </appmsg>"""
-        
+
         # 记录生成的XML，便于调试
         logger.debug(f"[SearchMusic] 生成的音乐卡片XML: {xml}")
-        
+
         return xml
 
     def get_music_cover(self, platform, detail_url, song_name="", singer=""):
@@ -112,7 +112,7 @@ class SearchMusic(Plugin):
         """
         # 默认封面图片
         default_cover = "https://y.qq.com/mediastyle/global/img/album_300.png"
-        
+
         try:
             # 根据不同平台使用不同的获取方式
             if platform == "kugou":
@@ -130,7 +130,7 @@ class SearchMusic(Plugin):
                         if cover_url and cover_url.startswith('http'):
                             logger.info(f"[SearchMusic] 成功获取酷狗音乐封面: {cover_url}")
                             return cover_url
-            
+
             elif platform == "netease":
                 # 尝试从网易云音乐详情页获取封面
                 headers = {
@@ -146,7 +146,7 @@ class SearchMusic(Plugin):
                         if cover_url and cover_url.startswith('http'):
                             logger.info(f"[SearchMusic] 成功获取网易音乐封面: {cover_url}")
                             return cover_url
-            
+
             elif platform == "qishui":
                 # 尝试从汽水音乐详情页获取封面
                 headers = {
@@ -180,12 +180,12 @@ class SearchMusic(Plugin):
                                     return cover_url
                                 logger.info(f"[SearchMusic] 成功获取汽水音乐封面: {cover_url}")
                                 return cover_url
-            
+
             # 对于汽水音乐，如果没有获取到封面，直接使用默认封面
             if platform == "qishui":
                 logger.warning(f"[SearchMusic] 无法获取汽水音乐封面图片，使用默认封面: {song_name} - {singer}")
                 return default_cover
-                
+
             # 对于其他平台，尝试使用歌曲名称和歌手名称搜索封面
             if song_name and singer:
                 # 尝试使用QQ音乐搜索API获取封面
@@ -203,10 +203,10 @@ class SearchMusic(Plugin):
                                 return cover_url
                 except Exception as e:
                     logger.error(f"[SearchMusic] 使用QQ音乐API获取封面时出错: {e}")
-            
+
             logger.warning(f"[SearchMusic] 无法获取封面图片，使用默认封面: {song_name} - {singer}")
             return default_cover
-            
+
         except Exception as e:
             logger.error(f"[SearchMusic] 获取封面图片时出错: {e}")
             return default_cover
@@ -232,7 +232,7 @@ class SearchMusic(Plugin):
             except json.JSONDecodeError:
                 # 不是JSON格式，继续使用文本解析方法
                 pass
-                
+
             # 查找 ±img=URL± 格式的封面图片（抖音API格式）
             img_pattern = r'±img=(https?://[^±]+)±'
             match = re.search(img_pattern, response_text)
@@ -278,16 +278,16 @@ class SearchMusic(Plugin):
                         return None
                     logger.warning(f"[SearchMusic] 下载重试 {retry + 1}/3: {e}")
                     time.sleep(1)  # 等待1秒后重试
-            
+
             # 使用TmpDir().path()获取正确的临时目录
             tmp_dir = TmpDir().path()
-            
+
             # 生成唯一的文件名，包含时间戳和随机字符串
             timestamp = int(time.time())
             random_str = ''.join(random.choices('abcdefghijklmnopqrstuvwxyz', k=6))
             music_name = f"{platform}_music_{timestamp}_{random_str}.mp3"
             music_path = os.path.join(tmp_dir, music_name)
-            
+
             # 保存文件，使用块写入以节省内存
             total_size = 0
             with open(music_path, "wb") as file:
@@ -295,16 +295,16 @@ class SearchMusic(Plugin):
                     if chunk:
                         file.write(chunk)
                         total_size += len(chunk)
-            
+
             # 验证文件大小
             if total_size == 0:
                 logger.error("[SearchMusic] 下载的文件大小为0")
                 os.remove(music_path)  # 删除空文件
                 return None
-                
+
             logger.info(f"[SearchMusic] 音乐下载完成: {music_path}, 大小: {total_size/1024:.2f}KB")
             return music_path
-            
+
         except Exception as e:
             logger.error(f"[SearchMusic] 下载音乐文件时出错: {e}")
             # 如果文件已创建，清理它
@@ -318,465 +318,151 @@ class SearchMusic(Plugin):
     def on_handle_context(self, e_context: EventContext):
         if e_context["context"].type != ContextType.TEXT:
             return
-            
+
         content = e_context["context"].content
         reply = Reply()
         reply.type = ReplyType.TEXT
 
-        # 处理随机点歌命令
-        if content.strip() == "随机点歌":
-            url = "https://hhlqilongzhu.cn/api/wangyi_hot_review.php"
-            try:
-                response = requests.get(url, timeout=10)
-                if response.status_code == 200:
-                    try:
-                        data = json.loads(response.text)
-                        if "code" in data and data["code"] == 200:
-                            # 提取歌曲信息
-                            title = data.get("song", "未知歌曲")
-                            singer = data.get("singer", "未知歌手")
-                            music_url = data.get("url", "")
-                            thumb_url = data.get("img", "")
-                            link = data.get("link", "")
-                            
-                            # 记录获取到的随机歌曲信息
-                            logger.info(f"[SearchMusic] 随机点歌获取成功: {title} - {singer}")
-                            
-                            # 构造音乐分享卡片
-                            appmsg = self.construct_music_appmsg(title, singer, music_url, thumb_url, "netease")
-                            
-                            # 返回APP消息类型
-                            reply.type = ReplyType.APP
-                            reply.content = appmsg
-                        else:
-                            reply.content = "随机点歌失败，请稍后重试"
-                    except json.JSONDecodeError:
-                        logger.error(f"[SearchMusic] 随机点歌API返回的不是有效的JSON: {response.text[:100]}...")
-                        reply.content = "随机点歌失败，请稍后重试"
-                else:
-                    reply.content = "随机点歌失败，请稍后重试"
-            except Exception as e:
-                logger.error(f"[SearchMusic] 随机点歌错误: {e}")
-                reply.content = "随机点歌失败，请稍后重试"
+        # 处理随机点歌和随机听歌
+        if content.strip() in ["随机点歌", "随机听歌"]:
+            self.handle_random_music(content, reply)
 
-        # 处理随机听歌命令
-        elif content.strip() == "随机听歌":
-            url = "https://hhlqilongzhu.cn/api/wangyi_hot_review.php"
-            try:
-                response = requests.get(url, timeout=10)
-                if response.status_code == 200:
-                    try:
-                        data = json.loads(response.text)
-                        if "code" in data and data["code"] == 200:
-                            # 提取歌曲信息
-                            title = data.get("song", "未知歌曲")
-                            singer = data.get("singer", "未知歌手")
-                            music_url = data.get("url", "")
-                            
-                            # 记录获取到的随机歌曲信息
-                            logger.info(f"[SearchMusic] 随机听歌获取成功: {title} - {singer}")
-                            
-                            # 下载音乐文件
-                            music_path = self.download_music(music_url, "netease")
-                            
-                            if music_path:
-                                # 返回语音消息
-                                reply.type = ReplyType.VOICE
-                                reply.content = music_path
-                            else:
-                                reply.type = ReplyType.TEXT
-                                reply.content = "音乐文件下载失败，请稍后重试"
-                        else:
-                            reply.content = "随机听歌失败，请稍后重试"
-                    except json.JSONDecodeError:
-                        logger.error(f"[SearchMusic] 随机听歌API返回的不是有效的JSON: {response.text[:100]}...")
-                        reply.content = "随机听歌失败，请稍后重试"
-                else:
-                    reply.content = "随机听歌失败，请稍后重试"
-            except Exception as e:
-                logger.error(f"[SearchMusic] 随机听歌错误: {e}")
-                reply.content = "随机听歌失败，请稍后重试"
-
-        # 处理酷狗点歌命令（搜索歌曲列表）
-        elif content.startswith("酷狗点歌 "):
-            song_name = content[5:].strip()  # 去除多余空格
-            if not song_name:
-                reply.content = "请输入要搜索的歌曲名称"
-                e_context["reply"] = reply
-                e_context.action = EventAction.BREAK_PASS
-                return
-                
-            # 检查是否包含序号（新增的详情获取功能）
-            params = song_name.split()
-            if len(params) == 2 and params[1].isdigit():
-                song_name, song_number = params
-                url = f"https://www.hhlqilongzhu.cn/api/dg_kgmusic.php?gm={song_name}&n={song_number}"
-                try:
-                    response = requests.get(url, timeout=10)
-                    content = response.text
-                    song_info = content.split('\n')
-                    
-                    if len(song_info) >= 4:  # 确保有足够的信息行
-                        # 提取歌曲信息
-                        title = song_info[1].replace("歌名：", "").strip()
-                        singer = song_info[2].replace("歌手：", "").strip()
-                        detail_url = song_info[3].replace("歌曲详情页：", "").strip()
-                        music_url = song_info[4].replace("播放链接：", "").strip()
-                        
-                        # 尝试从响应中提取封面图片URL
-                        thumb_url = self.extract_cover_from_response(content)
-                        
-                        # 如果从响应中没有提取到封面，尝试从详情页获取
-                        if not thumb_url:
-                            thumb_url = self.get_music_cover("kugou", detail_url, title, singer)
-                        
-                        # 构造音乐分享卡片
-                        appmsg = self.construct_music_appmsg(title, singer, music_url, thumb_url, "kugou")
-                        
-                        # 返回APP消息类型
-                        reply.type = ReplyType.APP
-                        reply.content = appmsg
-                    else:
-                        reply.content = "未找到该歌曲，请确认歌名和序号是否正确"
-                except Exception as e:
-                    logger.error(f"[SearchMusic] 酷狗点歌详情错误: {e}")
-                    reply.content = "获取失败，请稍后重试"
-            else:
-                # 原有的搜索歌曲列表功能
-                url = f"https://www.hhlqilongzhu.cn/api/dg_kgmusic.php?gm={song_name}&n="
-                try:
-                    response = requests.get(url, timeout=10)
-                    songs = response.text.strip().split('\n')
-                    if songs and len(songs) > 1:  # 确保有搜索结果
-                        reply_content = " 为你在酷狗音乐库中找到以下歌曲：\n\n"
-                        for song in songs:
-                            if song.strip():  # 确保不是空行
-                                reply_content += f"{song}\n"
-                        reply_content += f"\n请发送「酷狗点歌 {song_name} 序号」获取歌曲详情\n或发送「酷狗听歌 {song_name} 序号」来播放对应歌曲"
-                    else:
-                        reply_content = "未找到相关歌曲，请换个关键词试试"
-                    reply.content = reply_content
-                except Exception as e:
-                    logger.error(f"[SearchMusic] 酷狗点歌错误: {e}")
-                    reply.content = "搜索失败，请稍后重试"
-
-        # 处理网易点歌命令（搜索歌曲列表）
-        elif content.startswith("网易点歌 "):
-            song_name = content[5:].strip()
-            if not song_name:
-                reply.content = "请输入要搜索的歌曲名称"
-                e_context["reply"] = reply
-                e_context.action = EventAction.BREAK_PASS
-                return
-                
-            # 检查是否包含序号（新增的详情获取功能）
-            params = song_name.split()
-            if len(params) == 2 and params[1].isdigit():
-                song_name, song_number = params
-                url = f"https://www.hhlqilongzhu.cn/api/dg_wyymusic.php?gm={song_name}&n={song_number}"
-                try:
-                    response = requests.get(url, timeout=10)
-                    content = response.text
-                    song_info = content.split('\n')
-                    
-                    if len(song_info) >= 4:  # 确保有足够的信息行
-                        # 提取歌曲信息
-                        title = song_info[1].replace("歌名：", "").strip()
-                        singer = song_info[2].replace("歌手：", "").strip()
-                        detail_url = song_info[3].replace("歌曲详情页：", "").strip()
-                        music_url = song_info[4].replace("播放链接：", "").strip()
-                        
-                        # 尝试从响应中提取封面图片URL
-                        thumb_url = self.extract_cover_from_response(content)
-                        
-                        # 如果从响应中没有提取到封面，尝试从详情页获取
-                        if not thumb_url:
-                            thumb_url = self.get_music_cover("netease", detail_url, title, singer)
-                        
-                        # 构造音乐分享卡片
-                        appmsg = self.construct_music_appmsg(title, singer, music_url, thumb_url, "netease")
-                        
-                        # 返回APP消息类型
-                        reply.type = ReplyType.APP
-                        reply.content = appmsg
-                    else:
-                        reply.content = "未找到该歌曲，请确认歌名和序号是否正确"
-                except Exception as e:
-                    logger.error(f"[SearchMusic] 网易点歌详情错误: {e}")
-                    reply.content = "获取失败，请稍后重试"
-            else:
-                # 原有的搜索歌曲列表功能
-                url = f"https://www.hhlqilongzhu.cn/api/dg_wyymusic.php?gm={song_name}&n=&num=20"
-                try:
-                    response = requests.get(url, timeout=10)
-                    songs = response.text.strip().split('\n')
-                    if songs and len(songs) > 1:  # 确保有搜索结果
-                        reply_content = " 为你在网易音乐库中找到以下歌曲：\n\n"
-                        for song in songs:
-                            if song.strip():  # 确保不是空行
-                                reply_content += f"{song}\n"
-                        reply_content += f"\n请发送「网易点歌 {song_name} 序号」获取歌曲详情\n或发送「网易听歌 {song_name} 序号」来播放对应歌曲"
-                    else:
-                        reply_content = "未找到相关歌曲，请换个关键词试试"
-                    reply.content = reply_content
-                except Exception as e:
-                    logger.error(f"[SearchMusic] 网易点歌错误: {e}")
-                    reply.content = "搜索失败，请稍后重试"
-
-        # 处理汽水点歌命令
-        elif content.startswith("汽水点歌 "):
-            song_name = content[5:].strip()
-            
-            if not song_name:
-                reply.content = "请输入要搜索的歌曲名称"
-                e_context["reply"] = reply
-                e_context.action = EventAction.BREAK_PASS
-                return
-                
-            # 检查是否包含序号（详情获取功能）
-            params = song_name.split()
-            if len(params) == 2 and params[1].isdigit():
-                song_name, song_number = params
-                url = f"https://hhlqilongzhu.cn/api/dg_qishuimusic.php?msg={song_name}&n={song_number}"
-                try:
-                    response = requests.get(url, timeout=10)
-                    content = response.text
-                    
-                    # 尝试解析JSON响应
-                    try:
-                        data = json.loads(content)
-                        if "title" in data and "singer" in data and "music" in data:
-                            title = data["title"]
-                            singer = data["singer"]
-                            music_url = data["music"]
-                            
-                            # 提取封面图片URL
-                            thumb_url = ""
-                            if "cover" in data and data["cover"]:
-                                thumb_url = data["cover"]
-                                # 检查是否是抖音域名的图片
-                                if "douyinpic.com" in thumb_url or "douyincdn.com" in thumb_url:
-                                    logger.warning(f"[SearchMusic] 汽水点歌检测到抖音域名图片，可能无法在微信中正常显示: {thumb_url}")
-                                    # 不再使用备用图片
-                                    thumb_url = thumb_url
-                            
-                            # 如果没有提取到封面，尝试从详情页获取
-                            if not thumb_url:
-                                thumb_url = self.get_music_cover("qishui", "", title, singer)
-                            
-                            # 记录封面URL信息，便于调试
-                            logger.info(f"[SearchMusic] 汽水点歌封面URL: {thumb_url}")
-                            
-                            # 构造音乐分享卡片
-                            appmsg = self.construct_music_appmsg(title, singer, music_url, thumb_url, "qishui")
-                            
-                            # 返回APP消息类型
-                            reply.type = ReplyType.APP
-                            reply.content = appmsg
-                        else:
-                            reply.content = "未找到该歌曲，请确认歌名和序号是否正确"
-                    except json.JSONDecodeError:
-                        logger.error(f"[SearchMusic] 汽水音乐API返回的不是有效的JSON: {content[:100]}...")
-                        reply.content = "获取失败，请稍后重试"
-                        
-                except Exception as e:
-                    logger.error(f"[SearchMusic] 汽水点歌详情错误: {e}")
-                    reply.content = "获取失败，请稍后重试"
-            else:
-                # 搜索歌曲列表功能
-                url = f"https://hhlqilongzhu.cn/api/dg_qishuimusic.php?msg={song_name}"
-                try:
-                    response = requests.get(url, timeout=10)
-                    content = response.text.strip()
-                    
-                    # 尝试解析JSON响应
-                    try:
-                        data = json.loads(content)
-                        # 检查是否返回了歌曲列表
-                        if "data" in data and isinstance(data["data"], list) and len(data["data"]) > 0:
-                            # 新格式：包含完整歌曲列表的JSON
-                            reply_content = " 为你在汽水音乐库中找到以下歌曲：\n\n"
-                            for song in data["data"]:
-                                if "n" in song and "title" in song and "singer" in song:
-                                    reply_content += f"{song['n']}. {song['title']} - {song['singer']}\n"
-                            
-                            reply_content += f"\n请发送「汽水点歌 {song_name} 序号」获取歌曲详情\n或发送「汽水听歌 {song_name} 序号」来播放对应歌曲"
-                        elif "title" in data and "singer" in data:
-                            # 旧格式：只返回单个歌曲的JSON
-                            reply_content = " 为你在汽水音乐库中找到以下歌曲：\n\n"
-                            reply_content += f"1. {data['title']} - {data['singer']}\n"
-                            reply_content += f"\n请发送「汽水点歌 {song_name} 1」获取歌曲详情\n或发送「汽水听歌 {song_name} 1」来播放对应歌曲"
-                        else:
-                            reply_content = "未找到相关歌曲，请换个关键词试试"
-                    except json.JSONDecodeError:
-                        # 如果不是JSON，尝试使用正则表达式解析文本格式的结果
-                        pattern = r"(\d+)\.\s+(.*?)\s+-\s+(.*?)$"
-                        matches = re.findall(pattern, content, re.MULTILINE)
-                        
-                        if matches:
-                            reply_content = " 为你在汽水音乐库中找到以下歌曲：\n\n"
-                            for match in matches:
-                                number, title, singer = match
-                                reply_content += f"{number}. {title} - {singer}\n"
-                            
-                            reply_content += f"\n请发送「汽水点歌 {song_name} 序号」获取歌曲详情\n或发送「汽水听歌 {song_name} 序号」来播放对应歌曲"
-                        else:
-                            logger.error(f"[SearchMusic] 汽水音乐API返回格式无法解析: {content[:100]}...")
-                            reply_content = "搜索结果解析失败，请稍后重试"
-                    
-                    reply.content = reply_content
-                except Exception as e:
-                    logger.error(f"[SearchMusic] 汽水点歌错误: {e}")
-                    reply.content = "搜索失败，请稍后重试"
-
-
-        # 处理酷狗听歌命令
-        elif content.startswith("酷狗听歌 "):
-            params = content[5:].strip().split()
-            if len(params) != 2:
-                reply.content = "请输入正确的格式：酷狗听歌 歌曲名称 序号"
-                e_context["reply"] = reply
-                e_context.action = EventAction.BREAK_PASS
-                return
-                
-            song_name, song_number = params
-            if not song_number.isdigit():
-                reply.content = "请输入正确的歌曲序号（纯数字）"
-                e_context["reply"] = reply
-                e_context.action = EventAction.BREAK_PASS
-                return
-                
-            url = f"https://www.hhlqilongzhu.cn/api/dg_kgmusic.php?gm={song_name}&n={song_number}"
-            
-            try:
-                response = requests.get(url, timeout=10)
-                content = response.text
-                song_info = content.split('\n')
-                
-                if len(song_info) >= 4:  # 确保有足够的信息行
-                    # 获取音乐文件URL（在第4行），并去除可能的"播放链接："前缀
-                    music_url = song_info[4].strip()
-                    if "播放链接：" in music_url:
-                        music_url = music_url.split("播放链接：")[1].strip()
-                    
-                    # 下载音乐文件
-                    music_path = self.download_music(music_url, "kugou")
-                    
-                    if music_path:
-                        # 返回语音消息
-                        reply.type = ReplyType.VOICE
-                        reply.content = music_path
-                    else:
-                        reply.type = ReplyType.TEXT
-                        reply.content = "音乐文件下载失败，请稍后重试"
-                else:
-                    reply.content = "未找到该歌曲，请确认歌名和序号是否正确"
-
-            except Exception as e:
-                logger.error(f"[SearchMusic] 酷狗听歌错误: {e}")
-                reply.content = "获取失败，请稍后重试"
-
-        # 处理网易听歌命令
-        elif content.startswith("网易听歌 "):
-            params = content[5:].strip().split()
-            if len(params) != 2:
-                reply.content = "请输入正确的格式：网易听歌 歌曲名称 序号"
-                e_context["reply"] = reply
-                e_context.action = EventAction.BREAK_PASS
-                return
-                
-            song_name, song_number = params
-            if not song_number.isdigit():
-                reply.content = "请输入正确的歌曲序号（纯数字）"
-                e_context["reply"] = reply
-                e_context.action = EventAction.BREAK_PASS
-                return
-                
-            url = f"https://www.hhlqilongzhu.cn/api/dg_wyymusic.php?gm={song_name}&n={song_number}"
-            
-            try:
-                response = requests.get(url, timeout=10)
-                content = response.text
-                
-                # 解析返回内容
-                song_info = content.split('\n')
-                
-                if len(song_info) >= 4:  # 确保有足够的信息行
-                    # 获取音乐文件URL（在第4行），并去除可能的"播放链接："前缀
-                    music_url = song_info[4].strip()
-                    if "播放链接：" in music_url:
-                        music_url = music_url.split("播放链接：")[1].strip()
-                    
-                    # 下载音乐文件
-                    music_path = self.download_music(music_url, "netease")
-                    
-                    if music_path:
-                        # 返回语音消息
-                        reply.type = ReplyType.VOICE
-                        reply.content = music_path
-                    else:
-                        reply.type = ReplyType.TEXT
-                        reply.content = "音乐文件下载失败，请稍后重试"
-                else:
-                    reply.content = "未找到该歌曲，请确认歌名和序号是否正确"
-
-            except Exception as e:
-                logger.error(f"[SearchMusic] 网易听歌错误: {e}")
-                reply.content = "获取失败，请稍后重试"
-
-        # 处理汽水听歌命令
-        elif content.startswith("汽水听歌 "):
-            params = content[5:].strip().split()
-            if len(params) != 2:
-                reply.content = "请输入正确的格式：汽水听歌 歌曲名称 序号"
-                e_context["reply"] = reply
-                e_context.action = EventAction.BREAK_PASS
-                return
-                
-            song_name, song_number = params
-            if not song_number.isdigit():
-                reply.content = "请输入正确的歌曲序号（纯数字）"
-                e_context["reply"] = reply
-                e_context.action = EventAction.BREAK_PASS
-                return
-                
-            url = f"https://hhlqilongzhu.cn/api/dg_qishuimusic.php?msg={song_name}&n={song_number}"
-            
-            try:
-                response = requests.get(url, timeout=10)
-                content = response.text
-                
-                # 尝试解析JSON响应
-                try:
-                    data = json.loads(content)
-                    if "music" in data and data["music"]:
-                        music_url = data["music"]
-                        
-                        # 下载音乐文件
-                        music_path = self.download_music(music_url, "qishui")
-                        
-                        if music_path:
-                            # 返回语音消息
-                            reply.type = ReplyType.VOICE
-                            reply.content = music_path
-                        else:
-                            reply.type = ReplyType.TEXT
-                            reply.content = "音乐文件下载失败，请稍后重试"
-                    else:
-                        reply.content = "未找到该歌曲的播放链接，请确认歌名和序号是否正确"
-                except json.JSONDecodeError:
-                    logger.error(f"[SearchMusic] 汽水音乐API返回的不是有效的JSON: {content[:100]}...")
-                    reply.content = "获取失败，请稍后重试"
-                    
-            except Exception as e:
-                logger.error(f"[SearchMusic] 汽水听歌错误: {e}")
-                reply.content = "获取失败，请稍后重试"
+        # 处理酷狗、网易、汽水点歌和听歌命令
+        elif content.startswith(("酷狗点歌 ", "酷狗听歌 ", "网易点歌 ", "网易听歌 ", "汽水点歌 ", "汽水听歌 ")):
+            self.handle_platform_music(content, reply)
 
         else:
             return
 
         e_context["reply"] = reply
         e_context.action = EventAction.BREAK_PASS
+
+    def handle_random_music(self, content, reply:Reply):
+        url = "https://hhlqilongzhu.cn/api/wangyi_hot_review.php"
+        try:
+            response = requests.get(url, timeout=10)
+            if response.status_code == 200:
+                data = json.loads(response.text)
+                if "code" in data and data["code"] == 200:
+                    title = data.get("song", "未知歌曲")
+                    singer = data.get("singer", "未知歌手")
+                    music_url = data.get("url", "")
+                    thumb_url = data.get("img", "")
+
+                    logger.info(f"[SearchMusic] 随机{'点歌' if content.strip() == '随机点歌' else '听歌'}获取成功: {title} - {singer}")
+
+                    if content.strip() == "随机点歌":
+                        appmsg = self.construct_music_appmsg(title, singer, music_url, thumb_url, "netease")
+                        reply.type = ReplyType.APP
+                        reply.content = appmsg
+                    else:
+                        music_path = self.download_music(music_url, "netease")
+                        if music_path:
+                            reply.type = ReplyType.VOICE
+                            reply.content = music_path
+                        else:
+                            reply.content = "音乐文件下载失败，请稍后重试"
+                else:
+                    reply.content = f"随机{'点歌' if content.strip() == '随机点歌' else '听歌'}失败，请稍后重试"
+            else:
+                reply.content = f"随机{'点歌' if content.strip() == '随机点歌' else '听歌'}失败，请稍后重试"
+        except Exception as e:
+            logger.error(f"[SearchMusic] 随机{'点歌' if content.strip() == '随机点歌' else '听歌'}错误: {e}")
+            reply.content = f"随机{'点歌' if content.strip() == '随机点歌' else '听歌'}失败，请稍后重试"
+
+    def handle_platform_music(self, content, reply):
+        platforms = {
+            "酷狗": "kugou",
+            "网易": "netease",
+            "汽水": "qishui"
+        }
+        for platform_prefix, platform in platforms.items():
+            if content.startswith(f"{platform_prefix}点歌 ") or content.startswith(f"{platform_prefix}听歌 "):
+                song_name, song_number = self.parse_song_command(content, 5)
+                if not song_name:
+                    reply.content = "请输入要搜索的歌曲名称"
+                    return
+
+                url = self.get_platform_url(platform, song_name, song_number)
+                try:
+                    response = requests.get(url, timeout=10)
+                    if content.startswith(f"{platform_prefix}点歌 "):
+                        self.handle_platform_song_info(response, reply, platform, song_name, song_number)
+                    else:
+                        self.handle_platform_song_download(response, reply, platform)
+                except Exception as e:
+                    logger.error(f"[SearchMusic] {platform_prefix}{'点歌' if content.startswith(f'{platform_prefix}点歌 ') else '听歌'}错误: {e}")
+                    reply.content = "获取失败，请稍后重试"
+                break
+
+    def get_platform_url(self, platform, song_name, song_number):
+        urls = {
+            "kugou": f"https://www.hhlqilongzhu.cn/api/dg_kgmusic.php?gm={song_name}&n={song_number}",
+            "netease": f"https://www.hhlqilongzhu.cn/api/dg_wyymusic.php?gm={song_name}&n={song_number}",
+            "qishui": f"https://hhlqilongzhu.cn/api/dg_qishuimusic.php?msg={song_name}&n={song_number}"
+        }
+        return urls.get(platform, "")
+
+    def handle_platform_song_info(self, response, reply, platform, song_name, song_number):
+        content = response.text
+        song_info = content.split('\n')
+        if len(song_info) >= 4:
+            title = song_info[1].replace("歌名：", "").strip()
+            singer = song_info[2].replace("歌手：", "").strip()
+            detail_url = song_info[3].replace("歌曲详情页：", "").strip()
+            music_url = song_info[4].replace("播放链接：", "").strip()
+
+            thumb_url = self.extract_cover_from_response(content)
+            if not thumb_url:
+                thumb_url = self.get_music_cover(platform, detail_url, title, singer)
+
+            appmsg = self.construct_music_appmsg(title, singer, music_url, thumb_url, platform)
+            reply.type = ReplyType.APP
+            reply.content = appmsg
+        else:
+            reply.content = "未找到该歌曲，请确认歌名和序号是否正确"
+
+    def handle_platform_song_download(self, response, reply, platform):
+        content = response.text
+        song_info = content.split('\n')
+        if len(song_info) >= 4:
+            music_url = song_info[4].strip()
+            if "播放链接：" in music_url:
+                music_url = music_url.split("播放链接：")[1].strip()
+
+            music_path = self.download_music(music_url, platform)
+            if music_path:
+                reply.type = ReplyType.VOICE
+                reply.content = music_path
+            else:
+                reply.content = "音乐文件下载失败，请稍后重试"
+        else:
+            reply.content = "未找到该歌曲，请确认歌名和序号是否正确"
+
+    def parse_song_command(self, content, command_length):
+        """
+        解析歌曲命令，返回歌曲名称和序号。
+        如果用户没有输入序号，默认使用序号1。
+
+        :param content: 用户输入的完整命令
+        :param command_length: 命令的长度（如 "酷狗点歌 " 的长度为5）
+        :return: (song_name, song_number)
+        """
+        song_name = content[command_length:].strip()  # 去除多余空格
+        if not song_name:
+            return None, None
+
+        # 检查是否包含序号，如果不包含，默认使用序号1
+        params = song_name.split()
+        if len(params) == 1:
+            song_name = params[0]
+            song_number = "1"  # 默认使用序号1
+        elif len(params) == 2 and params[1].isdigit():
+            song_name, song_number = params
+        else:
+            return None, None
+
+        return song_name, song_number
 
     def get_help_text(self, **kwargs):
         return (
